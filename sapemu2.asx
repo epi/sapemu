@@ -1,0 +1,306 @@
+; playing control [under rom]
+; sapemu v0.1
+; epi/allegresse 0e.05.07d3
+
+        opt     h-l-
+
+        org     $52
+a0      org     *+2
+a1      org     *+2
+a2      org     *+2
+b0      org     *+1
+b1      org     *+1
+fp      org     *+1
+
+        org     $0180
+bnktab  org     *+4
+ad_msx  org     *+2
+ad_play org     *+2
+ad_init org     *+2
+type    org     *+1
+most    org     *+1
+songs   org     *+1
+defs    org     *+1
+stkbkup org     *+1
+
+        org     $2000
+memsav  org     *+256
+banx    org     *+64
+bnknum  org     *+1
+
+        org     $d800
+
+spokey  org     *+$20
+
+        jmp     transfer_module
+        jmp     play_module
+
+transfer_module
+        mva     #$00    ^40
+        jsr     xchg
+        mva     #1      b0
+        mwa     #$4000  a2
+traflop mva     #2      b1
+loop    jsr     get2
+        lda     buf2
+        cmp     #$ff
+        bne     loadblk
+        cmp     buf2+1
+        bne     loadblk
+        dec     b1
+        bpl     loop
+        lda     type
+        cmp     #4
+        beq     t0f
+        lda     most
+        bne     t0f
+
+        mwa:tay #$0080  a0
+t00     lda     #$d2
+t0a     cmp     (a0),y
+        beq     t0b
+t0c     iny:bne t0a
+        inc:ldx a0+1
+        cpx     #$d0
+        bne     t01
+        mvx     #$db    a0+1
+        bne     t00
+t01     cpx     #$ff
+        bne     t00
+t0f     jmp     xchg
+
+t0b     lda     a0
+        sub     #2
+        sta     a1
+        lda     a0+1
+        sbc     #0
+        sta     a1+1
+        lda     (a1),y
+        cmp     #$8d
+        beq     t0d
+        cmp     #$8c
+        beq     t0d
+        cmp     #$8e
+        beq     t0d
+        cmp     #$9d
+        beq     t0d
+        cmp     #$99
+        sne
+t0d     mva     #$d8    (a0),y
+        lda     #$d2
+        bne     t0c
+
+loadblk lda:pha buf2
+        lda:pha buf2+1
+        jsr     get2
+        pla:sta a0+1
+        pla:sta a0
+        lda     buf2
+        sub     a0
+        sta     a1
+        lda     buf2+1
+        sbc     a0+1
+        sta     a1+1
+        inw     a1
+        jsr     getblk
+        jmp     traflop
+
+get2    mwa     #2      a1
+        mwa     #buf2   a0
+
+; get block - in[a0:addr a1:len]; out[]; use[a2:xmsaddr b0:bnknum]
+getblk  ldy     #0
+g0      ldx     b0
+        mva     bnktab,x ^31
+        lda     (a2),y
+        mvx     #$fe    ^31
+        sta     (a0),y
+        inc     a2
+        bne     g1
+        inc     a2+1
+        bpl     g1
+        mva     #$40    a2+1
+        inc     b0
+g1      inw     a0
+        lda     a1
+        sub     #1
+        sta     a1
+        lda     a1+1
+        sbc     #0
+        sta     a1+1
+        ora     a1
+        bne     g0
+        rts
+
+xchg    mva     bnktab  ^31
+        mwa     #$0200  a0
+        mwa     #$4200  a1
+        ldy     #0
+x00     lda:tax (a0),y
+        mva     (a1),y  (a0),y
+        txa:sta (a1),y-
+        bne     x00
+        inc     a0+1
+        inc     a1+1
+        bpl     x00
+        mva     #$fe    ^31
+        rts
+
+play_type_c
+        lda     ad_play
+        add     #3
+        sta     p00+1
+        lda     ad_play+1
+        adc     #0
+        sta     p00+2
+        lda     ad_play
+        add     #6
+        sta     p01+1
+        lda     ad_play+1
+        adc     #0
+        sta     p01+2
+        lda     #$70
+        ldx     ad_msx
+        ldy     ad_msx+1
+        jsr     p00
+        lda     #$00
+        ldx:dex defs
+        jsr     p00
+        lda     fp
+        asl:tax @
+        mwa     pldltab,x ^42
+        mwa     #cmcnmi $fffa
+        mva     #34     ^40
+        asl     ^4e
+        jmp     *
+
+play_module
+        mva     #$00    ^40
+        sta     ^1a
+        jsr     xchg
+        lda     #$00
+        ldy     #$1f
+        sta:rpl spokey,y-
+        lda     type
+        beq     play_type_c
+        cmp     #4
+        beq     play_type_d
+        bne     play_type_b
+        jmp     xchg
+
+play_type_b
+        lda     fp
+        asl:tax @
+        mwa     pldltab,x ^42
+        jsr     p07
+        mwa     #anynmi $fffa
+        mva     #34     ^40
+        asl     ^4e
+        jmp     *
+
+p07     lda     defs
+        sub     #1
+        jmp     (ad_init)
+
+p00     jmp     $0000
+
+play_type_d
+        lda     fp
+        asl:tax @
+        mwa     pldltab,x ^42
+        mwa     #dignmi $fffa
+        mva     #34     ^40
+        tsx:stx stkbkup
+        asl     ^4e
+        jmp     (ad_init)
+
+cmcnmi  sta     ^4f
+p01     jsr     $0000
+        jsr     pokey_refresh
+        lda     ^29
+        cmp     #33
+        beq     pause_playing
+        rti
+
+anynmi  sta     ^4f
+        jsr     p03
+        lda     most
+        sne:jsr pokey_refresh
+        lda     ^29
+        cmp     #33
+        beq     pause_playing
+        rti
+
+p03     jmp     (ad_play)
+
+dignmi  pha
+        txa:pha
+        tya:pha
+        sta     ^4f
+        jsr     p03
+        lda     ^29
+        cmp     #33
+        beq     pause_playing_d
+        pla:tay
+        pla:tax
+        pla
+        rti
+
+pause_playing
+        mva     #$00    ^4e
+:3      pla
+p4b     lda     #$00
+        ldy     #8
+p02     sta     $d210,y
+        sta     $d200,y-
+        bpl     p02
+        jmp     xchg
+
+pause_playing_d
+        mva     #$00    ^4e
+        ldx:txs stkbkup
+        jmp     p4b
+
+pokey_refresh
+        ldx     #3
+        stx     $d21f
+        stx     $d20f
+        ldx     spokey
+        stx     $d210
+        stx     $d200
+        ldx     spokey+$01
+        stx     $d211
+        stx     $d201
+        ldx     spokey+$02
+        stx     $d212
+        stx     $d202
+        ldx     spokey+$03
+        stx     $d213
+        stx     $d203
+        ldx     spokey+$04
+        stx     $d214
+        stx     $d204
+        ldx     spokey+$05
+        stx     $d215
+        stx     $d205
+        ldx     spokey+$06
+        stx     $d216
+        stx     $d206
+        ldx     spokey+$07
+        stx     $d217
+        stx     $d207
+        ldx     spokey+$08
+        stx     $d218
+        stx     $d208
+        rts
+
+playdl0 dta     d'ppp',$41,a(playdl0)
+playdl1 dta     d'ppppppppppppppppppp',$f0,$41,a(playdl1)
+playdl2 dta     d'ppp',$f0,d'ppppppppppppppppp',$f0,$41,a(playdl2)
+playdl3 dta     $f0,d'ppppppppppp',$f0,d'ppppppppppp',$f0,$41,a(playdl3)
+
+pldltab dta     a(playdl0),a(playdl1),a(playdl2),a(playdl3)
+
+buf2    org     *+2
+
+        end

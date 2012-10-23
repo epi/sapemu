@@ -1,0 +1,643 @@
+; sapemu v0.1
+; pokey nam wszystkim
+; epi/allegresse 0e.05.07d3
+
+        opt     h+l+
+
+        org     $52
+a0      org     *+2
+a1      org     *+2
+a2      org     *+2
+b0      org     *+1
+b1      org     *+1
+fp      org     *+1
+
+        org     $0180
+bnktab  org     *+4
+ad_msx  org     *+2
+ad_play org     *+2
+ad_init org     *+2
+type    org     *+1
+most    org     *+1
+songs   org     *+1
+defs    org     *+1
+stkbkup org     *+1
+
+        org     $2000
+memsav  org     *+256
+banx    org     *+64
+bnknum  org     *+1
+lnbuf_  org     *+64
+fname_  dta     c'Dx:'
+        org     *+37
+urcplay equ     $d820
+
+start   jsr     xmsdetect
+        cpx     #5
+        bcs     ok
+        ldx     <noxms
+        ldy     >noxms
+        jsr     $c642
+        jmp     dosexit
+
+noxms   dta     c'Not enough extended RAM!',b($9b)
+
+ok      mvx:sei #$00    ^4e
+        mva     #$fe    ^31
+o00     mva     urc,x   urcplay,x
+        mva     urc+$0100,x urcplay+$0100,x
+        mva     urc+$0200,x urcplay+$0200,x
+        mva     urc+$0300,x urcplay+$0300,x+
+        bne     o00
+        mva     #$ff    ^31
+        lsr:cli ^4e
+        dex:stx bnknum
+        mwa     #titdl  $0230
+        mva     #$90    $02c6
+        sta     $02c8
+        mwa     #$0100  bnktab
+        mwa     #$0302  bnktab+2
+        mva     #0      b0
+s0      jsr     disptab
+        lda     b0
+:2      asl     @
+        tax:mva #'>'-32 xmsb_-1,x
+        mva     #'<'-32 xmsb_+2,x
+        jsr     getkey
+        mva     #' '-32 xmsb_-1,x
+        sta     xmsb_+2,x
+        cpy     #6
+        bne     s1
+        lda     b0
+        beq     s0
+        dec     b0
+        bpl     s0
+s1      cpy     #7
+        bne     s2
+        lda     b0
+        cmp     #3
+        beq     s0
+        inc     b0
+        bpl     s0
+s2      cpy     #15
+        bne     s3
+        ldx     b0
+        lda     bnktab,x
+        beq     s0
+        dec     bnktab,x
+        bpl     s0
+s3      cpy     #14
+        bne     s4
+        ldx     b0
+        lda     bnktab,x
+        cmp     bnknum
+        beq     s0
+        inc     bnktab,x
+        bpl     s0
+s4      cpy     #12
+        bne     s5
+        lda     bnktab
+        cmp     bnktab+1
+        beq     s0
+        cmp     bnktab+2
+        beq     s0
+        cmp     bnktab+3
+        beq     s0
+        lda     bnktab+1
+        cmp     bnktab+2
+        beq     s0
+        cmp     bnktab+3
+        beq     s0
+        lda     bnktab+2
+        cmp     bnktab+3
+        bne     l0
+        jmp     s0
+s5      cpy     #28
+        jne     s0
+        jmp     dosexit
+
+l0      ldx     bnktab
+        mva     banx,x  bnktab
+        ldx     bnktab+1
+        mva     banx,x  bnktab+1
+        ldx     bnktab+2
+        mva     banx,x  bnktab+2
+        ldx     bnktab+3
+        mva     banx,x  bnktab+3
+
+getfnam mwa     #fnamdl $0230
+        mva     #3      b0
+        lda     $0301
+        ora     #'0'
+        sta     fname_+1
+fnloop  ldy     b0
+        ldx     #0
+f00     mva     sapext_,x+ fname_,y+
+        cpx     #5
+        bne     f00
+        ldy     #0
+f01     lda     fname_,y
+        cmp     #$9b
+        beq     f02
+        jsr     a2i
+        sta     inpf_,y
+        iny:cpy #40
+        bne     f01
+f02     lda     #0
+f03     sta     inpf_,y+
+        cpy     #40
+        bcc     f03
+f04     ldy     b0
+        mva     #'.'+128-32 inpf_,y
+        jsr     getkey
+        cmp     #126
+        bne     f05
+        lda     b0
+        cmp     #3
+        beq     fnloop
+        dec     b0
+        bne     fnloop
+f05     cmp     #'<'
+        bne     f06
+        mva     #3      b0
+        bne     fnloop
+f06     cpy     #12
+        bne     f07
+        ldy     b0
+        mva     #'.'-32 inpf_,y
+        cpy     #3
+        bne     load
+        beq     fnloop
+f07     cpy     #28
+        bne     f11
+        jmp     dosexit
+f11     pha:tya
+        ldx     #8
+f12     cmp     drvkt,x
+        beq     f13
+        dex:bpl f12
+        pla:jmp f08
+f08     ldy     b0
+        cpy     #35
+        beq     fnloop
+        cmp     #'a'
+        bcc     f14
+        cmp     #'z'+1
+        bcs     f14
+        sbc     #31
+f14     ldy:dey #ktab_-ktab
+f09     cmp     ktab,y
+        beq     f10
+        dey:bpl f09
+        jmp     fnloop
+f10     ldy     b0
+        sta     fname_,y
+        inc     b0
+        jmp     fnloop
+f13     and:tay #$3f
+        mva     ($79),y fname_+1
+        jmp     fnloop
+        
+badtype equ     *
+error   jmp     getfnam
+
+load    lda     #0
+        ldy     #31
+f15     sta     auth_,y
+        sta     name_,y
+        sta     date_,y-
+        bpl     f15
+        sta     fp
+        sta     most
+        mva     #1      songs
+        sta     defs
+        ldx     #$10
+        mva     #12     $0342,x
+        jsr     $e456
+        mwa     #fname_ $0344,x
+        mva     #3      $0342,x
+        mva     #4      $034a,x
+        jsr     $e456
+        bmi     error
+        mwa     #5      $0348,x
+        mwa     #lnbuf_ $0344,x
+        mva     #7      $0342,x
+        jsr     $e456
+        ldy     #4
+l00     lda     lnbuf_,y
+        cmp     sapid_,y
+        bne     badtype
+        dey:bpl l00
+l01     mva     #1      $0348,x
+        mwa     #lnbuf_ $0344,x
+        mva     #7      $0342,x
+        jsr     $e456
+        lda     lnbuf_
+        cmp     #$ff
+        jeq     loadbin
+        mva     #1      b0
+        mwa     #memsav $0344,x
+l02     jsr     $e456
+        ldy     b0
+        mva     memsav  lnbuf_,y
+        cmp     #$0a
+        beq     l03
+        inc     b0
+        bne     l02
+l03     mva     #$20    lnbuf_-1,y
+        mwa     #comm_dt a0
+        mva:tay #0      b1
+l04     lda     lnbuf_,y
+        cmp     (a0),y
+        bne     l05
+        iny:cmp #$20
+        bne     l04
+        beq     rdone
+l05     ldy     #0
+        inc     b1
+l06     lda     (a0),y
+        inw     a0
+        cmp     #$20
+        bne     l06
+        cmp     #$00
+        beq     l01
+        bne     l04
+
+rdone   lda     b1
+        asl:tax @
+        mva     comm_ve,x r00+1
+        mva     comm_ve+1,x r00+2
+r00     jsr     $0000
+        ldx     #$10
+        jmp     l01
+
+s_name  ldy     #0
+l10     lda     lnbuf_+6,y
+        cmp     #'"'
+        beq     l0a
+        jsr     a2i
+        sta     name_,y+
+        cpy     #$20
+        bne     l10
+l0a     rts
+
+s_date  ldy     #0
+l11     lda     lnbuf_+6,y
+        cmp     #'"'
+        beq     l0b
+        jsr     a2i
+        sta     date_,y+
+        cpy     #$10
+        bne     l11
+l0b     rts
+
+s_auth  ldy     #0
+l12     lda     lnbuf_+8,y
+        cmp     #'"'
+        beq     l0c
+        jsr     a2i
+        sta     auth_,y+
+        cpy     #$20
+        bne     l12
+l0c     rts
+
+s_init  ldy     #5
+        jsr     gethex
+        sta     ad_init
+        sty     ad_init+1
+        rts
+
+s_play  ldy     #7
+        jsr     gethex
+        sta     ad_play
+        sty     ad_play+1
+        rts
+
+s_msx   ldy     #6
+        jsr     gethex
+        sta     ad_msx
+        sty     ad_msx+1
+        rts
+
+s_fasp  ldx     #3
+        mwa     #fasp_dt a0
+l15     ldy     #2
+l16     lda     lnbuf_+9,y
+        cmp     (a0),y
+        bne     l17
+        dey:bpl l16
+        txa:eor #$ff
+        add     #$04
+        sta     fp
+        rts
+l17     lda     #3
+        add:sta a0
+        scc:inc a0+1
+        dex:bpl l15
+        jmp     badtype
+
+s_ster  mva     #1      most
+        rts
+
+s_song  lda     lnbuf_+6
+        sub     #'0'
+        sta     songs
+        rts
+
+s_defs  lda     lnbuf_+8
+        sub     #'0'-1
+        sta     defs
+        rts
+
+s_type  lda     lnbuf_+5
+        sub     #32
+        sta     type_
+        ldy     #4
+l19     cmp     type_dt,y
+        beq     l1d
+        dey:bne l19
+l1d     sty     type
+        rts
+
+loadbin lda     fp
+        add     #'1'-32
+        sta     fasp_
+        lda     most
+:3      asl     @
+        adc     <most_dt
+        sta     a0
+        lda     #0
+        adc     >most_dt
+        sta     a0+1
+        ldy     #7
+        mva:rpl (a0),y  most_,y-
+        lda     songs
+        ora     #'0'-32
+        sta     sngs_
+        lda     defs
+        ora     #'0'-32
+        sta     defs_
+        mwa     #maindl $0230
+        lda     $14
+        cmp:req $14
+
+        lda     bnktab+1
+        ora     #1
+        sta     ^31
+        mva     #$ff    $4000
+        ldx     #$10
+        mva     #7      $0342,x
+        mwa     #$4001  $0344,x
+        mwa     #$3fff  $0348,x
+        jsr     $e456
+        bpl     b00
+        lda     $0348,x
+        add     #1
+        sta     a0
+        lda     $0349,x
+        adc     #$40
+        sta     a0+1
+        ldy     #7
+        lda     #$ff
+        sta:rpl (a0),y-
+        lda     bnktab+2
+        ora     #1
+        sta     ^31
+        ldy     #7
+        lda     #$ff
+        sta:rpl $4000,y-
+        bmi     playmsx
+b00     lda     bnktab+2
+        jsr     chuj
+        lda     bnktab+3
+        ora     #1
+        sta     ^31
+        ldy     #7
+        lda     #$ff
+        sta:rpl $4000,y-
+        bmi     playmsx
+b01     lda     bnktab+3
+        jsr     chuj
+        ldx     #$10
+        mva     #12     $0342,x
+        jsr     $e456
+
+playmsx jsr     transfer_module
+pmloop  jsr     getkey
+        cpy     #12
+        bne     z00
+        jsr     play_module
+        jmp     pmloop
+z00     cpy     #28
+        jeq     dosexit
+        cpy     #44
+        jeq     getfnam
+        cmp     #':'
+        bcs     pmloop
+        cmp     #'1'
+        bcc     pmloop
+        sbc     #'0'
+        tax:dex
+        cpx     songs
+        bcs     pmloop
+        sta     defs
+        ora     #'0'-32
+        sta     defs_
+        jsr     play_module
+        jmp     pmloop
+
+chuj    ora     #1
+        sta     ^31
+        mva     <$4000  $0344,x
+        sta     $0348,x
+        mva     >$4000  $0345,x
+        sta     $0349,x
+        jsr     $e456
+        bpl     b01
+        mva     $0348,x a0
+        lda     $0349,x
+        ora     #$40
+        sta     a0+1
+        ldy     #7
+        lda     #$ff
+        sta:rpl (a0),y-
+        rts
+
+getkey  lda     #$ff
+        cmp:req $02fc
+        ldy:sta $02fc
+        lda     ($79),y
+        rts
+
+a2i     cmp     #96
+        scc:rts
+        sbc     #31
+        rts
+
+gethex  ldx     #3
+l14     asl     a2
+        rol     a2+1
+        asl     a2
+        rol     a2+1
+        asl     a2
+        rol     a2+1
+        asl     a2
+        rol     a2+1
+        lda     lnbuf_,y
+        sub     #'0'
+        cmp     #10
+        scc:sbc #7
+        ora:sta a2
+        iny:dex
+        bpl     l14
+        lda     a2
+        ldy     a2+1
+        rts
+
+disptab mwa     #xmsb_-4 a1
+        ldx     bnktab
+        jsr     d0
+        ldx     bnktab+1
+        jsr     d0
+        ldx     bnktab+2
+        jsr     d0
+        ldx     bnktab+3
+d0      lda     #4
+        add:sta a1
+        scc:inc a1+1
+        lda     banx,x
+        ldy     #1
+phex    pha:jsr pxdig
+        pla
+:4      lsr     @
+pxdig   and     #$0f
+        ora     #'0'-32
+        cmp     #':'-32
+        scc:adc #6
+        sta     (a1),y-
+        rts
+
+xmb0    equ $0000
+xmbx    equ $4000
+xmb2    equ $8000
+xmb3    equ $c000
+
+xmsdetect
+        ldx     #0
+        ldy     #0
+        sei:sty ^4e
+        sty     ^40
+        lda:pha ^31
+        lda:pha xmb3
+        lda:pha xmb2
+        lda:pha xmb0
+xmd1    sty     ^31
+        mva     xmbx    memsav,y
+        iny:bne xmd1
+xmd2    sty     ^31
+        sty     xmbx
+        iny:bne xmd2
+        mva     #$ff    xmb0
+        sta     xmb2
+        sta     xmb3
+xmd3    sty     ^31
+        cpy     xmbx
+        bne     xmd4
+        tya:cmp #$ff
+        beq     xmd4
+        and     #$fe
+        sta     banx,x
+        inx:cpx #$40
+        beq     xmd6
+xmd4    iny:bne xmd3
+xmd6    ldy     #0
+xmd5    sty     ^31
+        mva     memsav,y+ xmbx
+        bne     xmd5
+        pla:sta xmb0
+        pla:sta xmb2
+        pla:sta xmb3
+        pla:sta ^31
+        lsr:cli ^4e
+        rts
+
+transfer_module
+        lda     #$20
+        jmp     gotourc
+play_module
+        lda     #$23
+gotourc sta     u00+1
+        mva:sei #$00    ^4e
+        mva     #$fe    ^31
+u00     jsr     urcplay
+        mva     #$ff    ^31
+        cli:lsr ^4e
+        rts
+
+dosexit ldx     #0
+        mva     #12     $0342,x
+        jsr     $e456
+        mva     #3      $0342,x
+        mva     #12     $034a,x
+        mwa     #enam_  $0344,x
+        jsr     $e456
+        jmp     ($0a)
+
+        org     $3000
+
+maindl  dta     d'pppppppp'
+        dta     $42,a(title),$02,$70,$42,a(mainsc),$02,$70,$02
+        dta     $02,$02,$02,$02,$70,$02,$41,a(maindl)
+
+fnamdl  dta     d'pppppppp'
+        dta     $42,a(title),$02,$70,$42,a(mainsc),$02,$70,$70
+        dta     $70,$70,$70,$70,$70,$42,a(titsc+$50),$41,a(fnamdl)
+
+mainsc  dta     d'  filename:                             '
+inpf_   dta     d'                                        '
+        dta     d'             sap file info              '
+        dta     d' title: '
+name_   dta     d'                                '
+        dta     d'author: '
+auth_   dta     d'                                '
+        dta     d'  date: '
+date_   dta     d'                                '
+most_   dta     d'         '
+fasp_   dta     d'1x/frame  type '
+type_   dta     d'    song '
+defs_   dta     d'0 of '
+sngs_   dta     d'0 '
+        dta     d'          pokey nam wszystkim           '
+
+titdl   dta     d'pppppppp'
+        dta     $42,a(title),$02,$70,$70,$70,$70,$42,a(titsc),$02
+        dta     $70,$70,$70,$70,$02,$41,a(titdl)
+
+title   dta     d'              sapemu v0.1               '
+        dta     d'       epi/allegresse 0e.05.07d3        '
+
+titsc   dta     d'     select extended memory banks:      '
+        dta     d'             '
+xmsb_   dta     d'                           '
+        dta     d'          pokey nam wszystkim         '
+
+most_dt dta     d'  mono  '
+        dta     d' stereo '
+comm_dt dta     c'NAME AUTHOR DATE PLAYER INIT MUSIC TYPE FASTPLAY '
+        dta     c'SONGS DEFSONG STEREO ',$00
+fasp_dt dta     c'31215610478 '
+type_dt dta     d'CBMSD'
+comm_ve dta     a(s_name,s_auth,s_date,s_play,s_init,s_msx,s_type,s_fasp)
+        dta     a(s_song,s_defs,s_ster)
+sapext_ dta     c'.SAP',$9b
+enam_   dta     c'E:',$9b
+sapid_  dta     c'SAP',13,10
+ktab    dta     c'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:>_@*?'
+ktab_   equ     *
+drvkt   dta     223,222,218,216,221,219,243,245,240
+
+urc     ins     "sapemu2.obx"
+
+        run     start
+
+        end
