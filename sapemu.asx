@@ -197,7 +197,7 @@ f10     ldy     b0
 f13     and:tay #$3f
         mva     ($79),y fname_+1
         jmp     fnloop
-        
+
 badtype equ     *
 error   jmp     getfnam
 
