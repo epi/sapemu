@@ -19,7 +19,7 @@ Usage
 
 You set up four banks, but the number of actually used banks depends only on the size of loaded files. Up to 16kB, only the first bank is used, and so on.
 
-**+, *** - move cursor
+<strong>+, *</strong> - move cursor
 
 **-, =** - select bank
 
@@ -54,7 +54,7 @@ Bugs and restrictions
 ---------------------
 
 **sapemu** plays SAP files of types **B**, **M**, **C**, **D** and **S**. The following memory areas are available for the loaded modules: $80-$FF, $0200-$CFFF, $DB80-$FFF9.
-Since no checks are done, songs that use other memory areas may (and usually they do) hang the computer. Some other songs (especially large **D** type files) may cause the crash as well - there may be various reasons, different in each individual case.
+Since no checks are done, songs that use other memory areas may (and usually they do) hang the computer. Some other songs (especially large **D** type files) may cause crash as well - there may be various reasons, different in each individual case.
 
 
 Version history
