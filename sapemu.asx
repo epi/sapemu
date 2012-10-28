@@ -712,7 +712,7 @@ l17     lda     #3
         jmp     badtype
 
 s_ster  mva     #1      most
-        rts
+s_time  rts
 
 s_song  lda     lnbuf_+6
         sub     #'0'
@@ -998,11 +998,11 @@ xmsb_   dta     d'                           '
 most_dt dta     d'  mono  '
         dta     d' stereo '
 comm_dt dta     c'NAME AUTHOR DATE PLAYER INIT MUSIC TYPE FASTPLAY '
-        dta     c'SONGS DEFSONG STEREO ',$00
+        dta     c'SONGS DEFSONG STEREO TIME ',$00
 fasp_dt dta     c'31215610478 '
 type_dt dta     d'CBMSD'
 comm_ve dta     a(s_name,s_auth,s_date,s_play,s_init,s_msx,s_type,s_fasp)
-        dta     a(s_song,s_defs,s_ster)
+        dta     a(s_song,s_defs,s_ster,s_time)
 sapext_ dta     c'.SAP',$9b
 enam_   dta     c'E:',$9b
 sapid_  dta     c'SAP',13,10
