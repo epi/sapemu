@@ -633,10 +633,10 @@ l05     ldy     #0
 l06     lda     (a0),y
         inw     a0
         cmp     #$20
-        bne     l06
+        beq     l04
         cmp     #$00
-        beq     l01
-        bne     l04
+        bne     l06
+        jmp     error
 
 rdone   lda     b1
         asl:tax @
