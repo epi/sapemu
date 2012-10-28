@@ -61,6 +61,8 @@ Version history
 ---------------
 
 <dl>
+ <dt>0.3 (2012-10-28)</dt>
+ <dd>fixed parsing unknown tags; TIME tag recognized but ignored</dd>
  <dt>0.2 (2008-09-15)</dt>
  <dd>added file selector</dd>
  <dt>0.1 (2003-05-14)</dt>
