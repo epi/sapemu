@@ -1,6 +1,6 @@
-; sapemu v0.1
+; sapemu
 ; pokey nam wszystkim
-; epi/allegresse 0e.05.07d3
+; copyleft 2003, 2008, 2012 epi/tristesse
 
         opt     h+l+
 
@@ -987,8 +987,8 @@ titdl   dta     d'pppppppp'
         dta     $42,a(title),$02,$70,$70,$70,$70,$42,a(titsc),$02
         dta     $70,$70,$70,$70,$02,$41,a(titdl)
 
-title   dta     d'              sapemu v0.2               '
-        dta     d'        epi/tristesse 0f.09.07d8        '
+title   dta     d'              sapemu v0.3               '
+        dta     d'        epi/tristesse 1c.0a.07dc        '
 
 titsc   dta     d'     select extended memory banks:      '
         dta     d'             '
