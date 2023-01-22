@@ -1,10 +1,10 @@
 all: sapemu.xex
 .PHONY: all
 
-dist: sapemu-0.3.zip
+dist: sapemu-0.4.zip
 .PHONY: dist
 
-sapemu-0.3.zip: sapemu.atr sapemu.xex README.html
+sapemu-0.4.zip: sapemu.atr sapemu.xex README.html
 	zip -9 $@ $^
 
 README.html: README.md
@@ -22,5 +22,5 @@ sapemu2.obx: sapemu2.asx
 	xasm $< /o:$@
 
 clean:
-	rm -f sapemu-0.3.zip README.html sapemu.atr sapemu.xex sapemu2.obx
+	rm -f sapemu-0.4.zip README.html sapemu.atr sapemu.xex sapemu2.obx
 .PHONY: clean

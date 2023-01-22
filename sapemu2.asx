@@ -1,6 +1,6 @@
 ; playing control [under rom]
-; sapemu v0.1
-; epi/allegresse 0e.05.07d3
+; sapemu v0.4
+; copyleft 2003, 2008, 2012, 2023 epi/tristesse
 
         opt     h-l-
 
@@ -175,6 +175,7 @@ play_type_c
         jmp     *
 
 play_module
+        jsr:rne is_key_pressed
         mva     #$00    ^40
         sta     ^1a
         jsr     xchg
@@ -217,18 +218,16 @@ play_type_d
 cmcnmi  sta     ^4f
 p01     jsr     $0000
         jsr     pokey_refresh
-        lda     ^29
-        cmp     #33
-        beq     pause_playing
+        jsr     is_key_pressed
+        bne     pause_playing
         rti
 
 anynmi  sta     ^4f
         jsr     p03
         lda     most
         sne:jsr pokey_refresh
-        lda     ^29
-        cmp     #33
-        beq     pause_playing
+        jsr     is_key_pressed
+        bne     pause_playing
         rti
 
 p03     jmp     (ad_play)
@@ -238,9 +237,8 @@ dignmi  pha
         tya:pha
         sta     ^4f
         jsr     p03
-        lda     ^29
-        cmp     #33
-        beq     pause_playing_d
+        jsr     is_key_pressed
+        bne     pause_playing_d
         pla:tay
         pla:tax
         pla
@@ -254,7 +252,16 @@ p4b     lda     #$00
 p02     sta     $d210,y
         sta     $d200,y-
         bpl     p02
+        jsr:rne is_key_pressed
+        sta     $d20e
+        mva     $10     $d20e
         jmp     xchg
+
+is_key_pressed
+        lda     $d20f
+        eor     #$ff
+        and     #$0c
+        rts
 
 pause_playing_d
         mva     #$00    ^4e

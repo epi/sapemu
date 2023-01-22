@@ -1,19 +1,21 @@
-; sapemu
+; sapemu v0.4
 ; pokey nam wszystkim
-; copyleft 2003, 2008, 2012 epi/tristesse
+; copyleft 2003, 2008, 2012, 2023 epi/tristesse
 
         opt     h+l+
 
         org     $52
+lowvars equ     *
 a0      org     *+2
 a1      org     *+2
 a2      org     *+2
 b0      org     *+1
 b1      org     *+1
 fp      org     *+1
+lowvars_len equ *-lowvars
 
-	org	$80
-a3	org	*+2
+        org     $80
+a3      org     *+2
 
         org     $0180
 bnktab  org     *+4
@@ -33,26 +35,67 @@ bnknum  org     *+1
 lnbuf_  org     *+64
 
 urcplay equ     $d820
+jfsymbol equ    $07eb
 
-start   jsr     xmsdetect
+start   ldx     #lowvars_len-1
+        mva:rpl lowvars,x save_lowvars,x-
+        lda     $0700
+        cmp     #'S'
+        bne     ?detect
+        lda     $0701
+        cmp     #$44
+        bcc     ?detect
+        lda     $0702
+        cmp     #7
+        bcc     ?detect
+        ldy     #$1b    ; _800FLG
+        lda     ($0a),y
+        bmi     ?noxms  ; technically, this means that there's no RAM under OS
+        ldy     #$1f    ; OSRMFLG
+        lda     ($0a),y
+        bmi     ?noxms  ; and this means RAM under OS is used by SDX
+        ldy     #$1d
+        lda     ($0a),y
+        cmp     #4
+        bcc     ?noxms
+        sta     bnknum
+        lda     #<?sym_T_
+        ldx     #>?sym_T_
+        jsr     jfsymbol
+        bmi     ?detect
+        sta     a3
+        stx     a3+1
+        ldy     #8
+?cpbanx lda     (a3),y
+        and     #$fe
+        sta     bnktab-8,y
+        iny:cpy #12
+        bcc     ?cpbanx
+        ldx     #4
+        bne     ok      !
+
+?detect jsr     xmsdetect
         cpx     #5
         bcs     ok
-        ldx     <noxms
-        ldy     >noxms
+?noxms  ldx     <?msg
+        ldy     >?msg
         jsr     $c642
         jmp     dosexit
 
-noxms   dta     c'Not enough extended RAM!',b($9b)
+?sym_T_ dta     c'T_      '
+?msg    dta     c'Not enough extended RAM!',b($9b)
 
-ok      mvx:sei #$00    ^4e
+ok      mvy:sei #$00    ^4e
         mva     #$fe    ^31
-o00     mva     urc,x   urcplay,x
-        mva     urc+$0100,x urcplay+$0100,x
-        mva     urc+$0200,x urcplay+$0200,x
-        mva     urc+$0300,x urcplay+$0300,x+
+o00     mva     urc,y   urcplay,y
+        mva     urc+$0100,y urcplay+$0100,y
+        mva     urc+$0200,y urcplay+$0200,y
+        mva     urc+$0300,y urcplay+$0300,y+
         bne     o00
         mva     #$ff    ^31
         lsr:cli ^4e
+        cpx     #4
+        jeq     getfnam
         dex:stx bnknum
         mwa     #titdl  $0230
         mva     #$90    $02c6
@@ -127,11 +170,35 @@ l0      ldx     bnktab
         ldx     bnktab+3
         mva     banx,x  bnktab+3
 
-getfnam jsr	cleardirwindow
+getfnam lda     $0700
+        cmp     #'S'
+        bne     ?selector  ; not Sparta DOS
+        ldy     #$0a    ; BUFOFF
+        lda     ($0a),y
+        add     #$3f    ; LBUF
+        tay
+?spaces lda     ($0a),y
+        cmp     #' '
+        bne     ?eol
+        iny
+        bne     ?spaces         !
+?eol    cmp     #$9b
+        beq     ?selector  ; program invoked without parameters
+        ldx     #0
+?cpname mva     ($0a),y+ filenam+1,x+
+        cmp     #$9b
+        bne     ?cpname
+        mva     #'D'    filenam
+        jmp     loadImage_4
+
+?selector
+        jsr     cleardirwindow
         lda     $0301
         ora     #'0'
         sta     dirname+1
-	mwa     #fnamdl $0230
+        mwa     #fnamdl $0230
+        mva     #$90    $02c6
+        sta     $02c8
 tipViewerMainLoop
         jsr     displayDirMask
         jsr     displayDirectory
@@ -181,53 +248,53 @@ tipv0d  lda     fdpos
         inc     fdpos
         bne     tipv0b          !
 
-tipv01	cmp	#'+'
-	bne	tipv22
+tipv01  cmp     #'+'
+        bne     tipv22
         lda     fpos
-	sbc	#8		+
+        sbc     #8              +
         bcc     tipv2a
-	sta	fpos
+        sta     fpos
         bpl     tipv2b          !
 tipv2a  lda     fdpos
-	sbc	#7		-
-	scs:mva	#0	fpos
-	sta	fdpos
+        sbc     #7              -
+        scs:mva #0      fpos
+        sta     fdpos
 tipv2b  jmp     tipViewerMainLoop
 
-tipv22	cmp	#'*'
-	bne	tipv21
+tipv22  cmp     #'*'
+        bne     tipv21
         lda     files
         cmp     #25
         bcs     tipv36
-        lda	fpos
-	adc	#8		-
+        lda     fpos
+        adc     #8              -
         cmp     files
-        bcc	tipv37
-	lda	files
-	sbc	#1
-tipv37	sta     fpos
+        bcc     tipv37
+        lda     files
+        sbc     #1
+tipv37  sta     fpos
         jmp     tipViewerMainLoop
 tipv36  lda     fpos
         cmp     #16
         bcs     tipv2d
-        adc	#8		-
-	sta	fpos
-        bpl     tipv2b		!
+        adc     #8              -
+        sta     fpos
+        bpl     tipv2b          !
 tipv2d  lda     fdpos
         adc     #30             +
         cmp     files
         bcs     tipv2e
-	lda	#8
-	adc:sta	fdpos
-	bcc	tipv20		!
-tipv2e	lda	files
-	sub	#24
-	sta	fdpos
-	lda	#23
-	sta	fpos
+        lda     #8
+        adc:sta fdpos
+        bcc     tipv20          !
+tipv2e  lda     files
+        sub     #24
+        sta     fdpos
+        lda     #23
+        sta     fpos
         bne     tipv20          !
 
-tipv21	cmp     #'1'
+tipv21  cmp     #'1'
         bcc     tipv0c
         cmp     #':'
         bcs     tipv0c
@@ -236,13 +303,13 @@ tipv21	cmp     #'1'
 tipv20  jmp     tipViewerMainLoop
 tipv0c  cpy     #12
         bne     tipv20
-	lda	files
-	beq	tipv20
+        lda     files
+        beq     tipv20
         jsr     getFilename
         ldy     #15
         lda     (a1),y
         bmi     enterSubdir
-        jmp	load
+        jmp     load
 
 enterSubdir
         ldx     #$ff
@@ -286,11 +353,11 @@ cleardirwindow
         mva     #0      files
         sta     fpos
         sta     fdpos
-	ldx	#160
-read_00	sta	fnamsc+39,x
-	sta	fnamsc+199,x
-	dex:bne	read_00
-	rts
+        ldx     #160
+read_00 sta     fnamsc+39,x
+        sta     fnamsc+199,x
+        dex:bne read_00
+        rts
 
 changeDisk
         ldy     #1
@@ -304,7 +371,7 @@ tipv50  mva     subdirMask,y+   dirname+3,x+
         jsr     displayDirMask
 
 readDirectory
-	jsr	cleardirwindow
+        jsr     cleardirwindow
         ldx     #16
         mva     #12     $0342,x
         jsr     $e456
@@ -312,7 +379,7 @@ readDirectory
         mva     #6      $034a,x
         mwa     #dirname $0344,x
         jsr     $e456
-	jmi	error
+        jmi     error
         mwa     #fnamebuf a1
         mwa     #fname  $0344,x
         lda     #'*'
@@ -328,7 +395,7 @@ readDirLoop
         mva     #5      $0342,x
         mwa     #50     $0348,x
         jsr     $e456
-	jmi	error
+        jmi     error
         lda     fname
         cmp     #'0'
         bcc     readDirContinue
@@ -344,7 +411,7 @@ readDirRet
 ;        jsr     displayMessage
 readDirRet2
 ;        jmp     restoreScreen
-	rts
+        rts
 readDirContinue
         lda     fname+1
         cmp     #':'
@@ -431,7 +498,7 @@ tipv10  mva     (a1),y+      fname,x+
 displayCursor
         mva     #0      a1
         lda     fpos
-	and	#$07
+        and     #$07
         lsr     @
         ror     a1
         lsr     @
@@ -439,35 +506,35 @@ displayCursor
         lsr     @
         ror     a1
         sta     a1+1
-	lda	fpos
-	and	#$07
-:3	asl	@
-	adc:sta	a1
-	scc:inc	a1+1
+        lda     fpos
+        and     #$07
+:3      asl     @
+        adc:sta a1
+        scc:inc a1+1
         lda     <fnamsc+40
         add:sta a1
         lda     >fnamsc+40
         adc:sta a1+1
-	lda	fpos
-	and	#$f8
-:3	lsr	@
-	tay
-	lda	displayCursor_cols,y
-	tay
+        lda     fpos
+        and     #$f8
+:3      lsr     @
+        tay
+        lda     displayCursor_cols,y
+        tay
         lda     #12
-	sta	displayCursor_p
+        sta     displayCursor_p
 displayCursorLoop
         lda     (a1),y
         eor     #$80
         sta     (a1),y-
-	dec	displayCursor_p
+        dec     displayCursor_p
         bpl     displayCursorLoop
         rts
 
 displayCursor_p
-	dta	0
+        dta     0
 displayCursor_cols
-	dta	12,25,38
+        dta     12,25,38
 
 displayDirectory
         lda     files
@@ -491,36 +558,36 @@ displayDirectory
 displayDirLoop
         ldy     #10
 displayDirLoop_2
-        lda	(a1),y
-	sub	#32
-	sta	(a2),y-
-	bpl	displayDirLoop_2
+        lda     (a1),y
+        sub     #32
+        sta     (a2),y-
+        bpl     displayDirLoop_2
         lda     #$10
         jsr     nextDListLine_1
         lda     #40
         add:sta a2
         scc:inc a2+1
         inx
-	cpx	files
-	beq	displayDirRet
-	cpx	#24
-	beq	displayDirRet
-	cpx	#8
-	beq	displayDirLoop_3
-	cpx	#16
-	bne	displayDirLoop
+        cpx     files
+        beq     displayDirRet
+        cpx     #24
+        beq     displayDirRet
+        cpx     #8
+        beq     displayDirLoop_3
+        cpx     #16
+        bne     displayDirLoop
 displayDirLoop_3
-	lda	a2
-	sbc	<320-13		+
-	sta	a2
-	lda	a2+1
-	sbc	>320-13
-	sta	a2+1
-	bne	displayDirLoop	!
+        lda     a2
+        sbc     <320-13         +
+        sta     a2
+        lda     a2+1
+        sbc     >320-13
+        sta     a2+1
+        bne     displayDirLoop  !
 displayDirRet
         rts
 
-dirmask equ	fnamsc
+dirmask equ     fnamsc
 
 displayDirMask
         ldy     #39
@@ -537,16 +604,16 @@ displayDirMask_3
         lda     dirname,y+
         cmp     #$9b
         beq     displayDirMask_ret
-	sbc	#31			- dla wszystkich mniejszych od $9b
+        sbc     #31                     - dla wszystkich mniejszych od $9b
         sta     dirmask,x+
         bne     displayDirMask_3        !
 displayDirMask_2
         ldx     #38
 displayDirMask_4
-        lda	dirname-1,y-
-	sbc	#32			+
-	sta	dirmask,x-
-	bpl	displayDirMask_4
+        lda     dirname-1,y-
+        sbc     #32                     +
+        sta     dirmask,x-
+        bpl     displayDirMask_4
         mva     #'.'-32    dirmask
         sta     dirmask+1
         sta     dirmask+2
@@ -554,21 +621,22 @@ displayDirMask_ret
         rts
 
 badtype equ     *
-error   jmp     getfnam
+error   ldx     $0231
+        cpx     >titdl
+        jeq     getfnam
+exit    ldx     #lowvars_len-1
+        mva:rpl save_lowvars,x lowvars,x-
+        jmp     ($0a)
 
 load    lda     #0
         ldy     #31
-f15     sta	mainsc+8,y
-	sta     auth_,y
+f15     sta     mainsc+8,y
+        sta     auth_,y
         sta     name_,y
         sta     date_,y-
         bpl     f15
-        sta     fp
-        sta     most
-        mva     #1      songs
-        sta     defs
 
-	ldx     #0
+        ldx     #0
 loadImage_1
         lda     dirname,x
         cmp     #'*'
@@ -581,12 +649,17 @@ loadImage_3
         mva     fname,y+        filenam,x+
         cmp     #$9b
         beq     loadImage_4
-	sbc	#31		-
-	sta	mainsc+7,y
-	bne	loadImage_3	!
+        sbc     #31             -
+        sta     mainsc+7,y
+        bne     loadImage_3     !
 
 loadImage_4
-	ldx     #$10
+        mvx     #0      fp
+        stx     most
+        inx:stx songs
+        stx     defs
+
+        ldx     #$10
         mva     #12     $0342,x
         jsr     $e456
         mwa     #filenam $0344,x
@@ -752,11 +825,14 @@ loadbin lda     fp
         lda     defs
         ora     #'0'-32
         sta     defs_
+        lda     $0231
+        cmp     >titdl
+        bne     ?nodl
         mwa     #maindl $0230
         lda     $14
         cmp:req $14
 
-        lda     bnktab+1
+?nodl   lda     bnktab+1
         ora     #1
         sta     ^31
         mva     #$ff    $4000
@@ -798,6 +874,11 @@ b01     lda     bnktab+3
         jsr     $e456
 
 playmsx jsr     transfer_module
+        lda     $0231
+        cmp     >titdl
+        beq     pmloop
+        jsr     play_module
+        jmp     exit
 pmloop  jsr     getkey
         cpy     #12
         bne     z00
@@ -956,7 +1037,7 @@ dosexit ldx     #0
         mva     #12     $034a,x
         mwa     #enam_  $0344,x
         jsr     $e456
-        jmp     ($0a)
+        jmp     exit
 
         org     $3000
 
@@ -967,6 +1048,10 @@ maindl  dta     d'pppppppp'
 fnamdl  dta     d'pppppppp'
         dta     $42,a(title),$02,$20,$42,a(fnamsc),$10,$02,$02,$02,$02
         dta     $02,$02,$02,$02,$20,$42,a(titsc+$50),$41,a(fnamdl)
+
+titdl   dta     d'pppppppp'
+        dta     $42,a(title),$02,$70,$70,$70,$70,$42,a(titsc),$02
+        dta     $70,$70,$70,$70,$02,$41,a(titdl)
 
 mainsc  dta     d'  file:                                 '
         dta     d'             sap file info              '
@@ -983,12 +1068,8 @@ defs_   dta     d'0 of '
 sngs_   dta     d'0 '
         dta     d'          pokey nam wszystkim           '
 
-titdl   dta     d'pppppppp'
-        dta     $42,a(title),$02,$70,$70,$70,$70,$42,a(titsc),$02
-        dta     $70,$70,$70,$70,$02,$41,a(titdl)
-
-title   dta     d'              sapemu v0.3               '
-        dta     d'        epi/tristesse 1c.0a.07dc        '
+title   dta     d'              sapemu v0.4               '
+        dta     d'        epi/tristesse 16.01.07e7        '
 
 titsc   dta     d'     select extended memory banks:      '
         dta     d'             '
@@ -1024,8 +1105,9 @@ fpos    org     *+1
 fdpos   org     *+1
 mode    org     *+1
 
-fnamsc	org	*+360
+fnamsc  org     *+360
 
+save_lowvars org *+lowvars_len
 fnamebuf equ *
 
         run     start
